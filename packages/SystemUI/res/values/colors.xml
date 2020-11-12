@@ -267,6 +267,14 @@
     <color name="control_enabled_default_foreground">@color/GM2_blue_300</color>
     <color name="control_enabled_cool_foreground">@color/GM2_blue_300</color>
 
+    <!-- volume-panel -->
+    <color name="volume_background_tint">#f2f2f2</color>
+    <color name="ringer_icon_normal">#5c5c5c</color>
+    <color name="ringer_bcg_normal">@color/volume_background_tint</color>
+    <color name="ringer_icon_mute">@android:color/white</color>
+    <color name="row_icon_dark">@color/ringer_icon_normal</color>
+    <color name="row_icon_white">@android:color/white</color>
+
     <!-- Docked misalignment message -->
     <color name="misalignment_text_color">#F28B82</color>
 

@@ -156,6 +156,7 @@ public class VolumeDialogImpl implements VolumeDialog,
     private ViewGroup mDialogView;
     private ViewGroup mDialogMainView;
     private ViewGroup mDialogSecondaryView;
+    private ViewGroup mDialogThirdView;
     private ViewGroup mDialogRowsView;
     private ViewGroup mRinger;
     private ImageButton mRingerIcon;
@@ -303,6 +304,11 @@ public class VolumeDialogImpl implements VolumeDialog,
         mDialogSecondaryView = mDialog.findViewById(R.id.secondary);
         if (mDialogSecondaryView != null) {
             setLayoutGravity(mDialogSecondaryView.getLayoutParams(), panelGravity);
+        }
+
+        mDialogThirdView = mDialog.findViewById(R.id.third);
+        if (mDialogSecondaryView != null) {
+            setLayoutGravity(mDialogThirdView.getLayoutParams(), panelGravity);
         }
 
         mDialogRowsView = mDialog.findViewById(R.id.volume_dialog_rows);
@@ -544,19 +550,8 @@ public class VolumeDialogImpl implements VolumeDialog,
 
         row.icon = row.view.findViewById(R.id.volume_row_icon);
         row.icon.setImageResource(iconRes);
-        if (row.stream != AudioSystem.STREAM_ACCESSIBILITY) {
-            row.icon.setOnClickListener(v -> {
-                Events.writeEvent(Events.EVENT_ICON_CLICK, row.stream, row.iconState);
-                rescheduleTimeoutH();
-                mController.setActiveStream(row.stream);
-                final boolean vmute = row.ss.level == row.ss.levelMin;
-                mController.setStreamVolume(stream,
-                        vmute ? row.lastAudibleLevel : row.ss.levelMin);
-                row.userAttempt = 0;  // reset the grace period, slider updates immediately
-            });
-        } else {
-            row.icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        }
+        row.icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        row.icon.setClickable(false);
     }
 
     private boolean isNotificationVolumeLinked() {
@@ -692,8 +687,6 @@ public class VolumeDialogImpl implements VolumeDialog,
 
                 mExpandRows.setExpanded(!mExpanded);
                 mExpanded = !mExpanded;
-
-                updateMediaOutputH();
             });
         }
     }
@@ -1089,6 +1082,14 @@ public class VolumeDialogImpl implements VolumeDialog,
             if (!mExpanded) Util.setVisOrGone(row.view, shouldBeVisible);
             if (row.view.isShown()) {
                 updateVolumeRowTintH(row, isActive);
+                ColorStateList mIconTint = ColorStateList.valueOf(mContext.getResources().getColor(R.color.row_icon_dark));
+                ColorStateList mIconTintNormal = ColorStateList.valueOf(mContext.getResources().getColor(R.color.row_icon_white));
+                int rowprogress = row.slider.getProgress();
+                if (rowprogress < 500) {
+                    row.icon.setImageTintList(mIconTint);
+                } else {
+                    row.icon.setImageTintList(mIconTintNormal);
+                }
             }
         }
     }
@@ -1099,6 +1100,10 @@ public class VolumeDialogImpl implements VolumeDialog,
             if (ss == null) {
                 return;
             }
+
+            ColorStateList ringerbackgroundnormal = mContext.getResources().getColorStateList(R.color.ringer_bcg_normal);
+            int RingerMuteT = mContext.getResources().getColor(R.color.ringer_icon_mute);
+            int RingerNormalT = mContext.getResources().getColor(R.color.ringer_icon_normal);
 
             boolean isZenMuted = mState.zenMode == Global.ZEN_MODE_ALARMS
                     || mState.zenMode == Global.ZEN_MODE_NO_INTERRUPTIONS
@@ -1111,12 +1116,16 @@ public class VolumeDialogImpl implements VolumeDialog,
                     addAccessibilityDescription(mRingerIcon, RINGER_MODE_VIBRATE,
                             mContext.getString(R.string.volume_ringer_hint_mute));
                     mRingerIcon.setTag(Events.ICON_STATE_VIBRATE);
+                    mRinger.setBackgroundTintList(null);
+                    mRingerIcon.setColorFilter(RingerMuteT);
                     break;
                 case AudioManager.RINGER_MODE_SILENT:
                     mRingerIcon.setImageResource(R.drawable.ic_volume_ringer_mute);
                     mRingerIcon.setTag(Events.ICON_STATE_MUTE);
                     addAccessibilityDescription(mRingerIcon, RINGER_MODE_SILENT,
                             mContext.getString(R.string.volume_ringer_hint_unmute));
+                    mRinger.setBackgroundTintList(null);
+                    mRingerIcon.setColorFilter(RingerMuteT);
                     break;
                 case AudioManager.RINGER_MODE_NORMAL:
                 default:
@@ -1126,6 +1135,8 @@ public class VolumeDialogImpl implements VolumeDialog,
                         addAccessibilityDescription(mRingerIcon, RINGER_MODE_NORMAL,
                                 mContext.getString(R.string.volume_ringer_hint_unmute));
                         mRingerIcon.setTag(Events.ICON_STATE_MUTE);
+                        mRinger.setBackgroundTintList(null);
+                        mRingerIcon.setColorFilter(RingerMuteT);
                     } else {
                         mRingerIcon.setImageResource(R.drawable.ic_volume_ringer);
                         if (mController.hasVibrator()) {
@@ -1136,6 +1147,8 @@ public class VolumeDialogImpl implements VolumeDialog,
                                     mContext.getString(R.string.volume_ringer_hint_mute));
                         }
                         mRingerIcon.setTag(Events.ICON_STATE_UNMUTE);
+                        mRinger.setBackgroundTintList(ringerbackgroundnormal);
+                        mRingerIcon.setColorFilter(RingerNormalT);
                     }
                     break;
             }
@@ -1392,18 +1405,13 @@ public class VolumeDialogImpl implements VolumeDialog,
             row.slider.requestFocus();
         }
         boolean useActiveColoring = isActive && row.slider.isEnabled();
-        final ColorStateList tint = useActiveColoring
-                ? Utils.getColorAccent(mContext)
-                : Utils.getColorAttr(mContext, android.R.attr.colorForeground);
-        final int alpha = useActiveColoring
-                ? Color.alpha(tint.getDefaultColor())
-                : getAlphaAttr(android.R.attr.secondaryContentAlpha);
-        if (tint == row.cachedTint && mExpanded) return;
+        final ColorStateList tint = Utils.getColorAccent(mContext);
+        final int alpha = getAlphaAttr(android.R.attr.secondaryContentAlpha);
+        if (tint == row.cachedTint) return;
         row.slider.setProgressTintList(tint);
         row.slider.setThumbTintList(tint);
         row.slider.setProgressBackgroundTintList(tint);
         row.slider.setAlpha(((float) alpha) / 255);
-        row.icon.setImageTintList(tint);
         row.icon.setImageAlpha(alpha);
         row.cachedTint = tint;
     }
@@ -1456,6 +1464,13 @@ public class VolumeDialogImpl implements VolumeDialog,
                     row.anim.cancel();
                 }
                 row.slider.setProgress(newProgress, true);
+            }
+            ColorStateList mIconTint = ColorStateList.valueOf(mContext.getResources().getColor(R.color.row_icon_dark));
+            ColorStateList mIconTintNormal = ColorStateList.valueOf(mContext.getResources().getColor(R.color.row_icon_white));
+            if (newProgress < 500) {
+                row.icon.setImageTintList(mIconTint);
+            } else {
+                row.icon.setImageTintList(mIconTintNormal);
             }
         }
     }
@@ -1666,6 +1681,13 @@ public class VolumeDialogImpl implements VolumeDialog,
                     Events.writeEvent(Events.EVENT_TOUCH_LEVEL_CHANGED, mRow.stream,
                             userLevel);
                 }
+            }
+            ColorStateList mIconTint = ColorStateList.valueOf(mContext.getResources().getColor(R.color.row_icon_dark));
+            ColorStateList mIconTintNormal = ColorStateList.valueOf(mContext.getResources().getColor(R.color.row_icon_white));
+            if (progress < 500) {
+                mRow.icon.setImageTintList(mIconTint);
+            } else {
+                mRow.icon.setImageTintList(mIconTintNormal);
             }
         }
 
